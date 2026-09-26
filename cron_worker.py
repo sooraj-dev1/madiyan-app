@@ -1,7 +1,10 @@
+import os
+import time
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from datetime import datetime, timezone
 import firebase_admin
 from firebase_admin import credentials, firestore, messaging
-from datetime import datetime, timezone
-import time
 
 # 1. Firebase Admin SDK initialize cheyyunnu
 cred = credentials.Certificate("serviceAccountKey.json")
@@ -28,18 +31,15 @@ ROASTS = {
 }
 
 def check_and_send_due_notifications():
-    # Timezone-aware UTC timestamp (Python 3.14 warning fix)
     now_iso = datetime.now(timezone.utc).isoformat()
 
     try:
         tasks_ref = db.collection("tasks")
-        # Single-field filter query (Composite index nirdharanam cheyyendathilla!)
         due_tasks = tasks_ref.where(filter=firestore.FieldFilter("completed", "==", False)).stream()
 
         for doc in due_tasks:
             task = doc.to_dict()
 
-            # Python side checking: Notified aayittillathathum time kazhinjathum aaya tasks
             if not task.get("notified", False) and task.get("time", "") <= now_iso:
                 token = task.get("deviceToken")
 
@@ -49,23 +49,30 @@ def check_and_send_due_notifications():
                     roast_msg = roast_list[0]
                     task_title = task.get("title", "Task")
 
-                    # FCM Web Push Payload
                     message = messaging.Message(
                         notification=messaging.Notification(
                             title=f"⏰ {task_title}",
                             body=roast_msg
                         ),
                         data={
-                            "taskId": doc.id,
+                            "taskId": str(doc.id),
                             "title": f"⏰ {task_title}",
                             "body": roast_msg
                         },
+                        webpush=messaging.WebpushConfig(
+                            headers={"Urgency": "high"},
+                            notification=messaging.WebpushNotification(
+                                title=f"⏰ {task_title}",
+                                body=roast_msg,
+                                icon="https://cdn-icons-png.flaticon.com/512/3239/3239958.png",
+                                sound="default"
+                            )
+                        ),
                         token=token
                     )
 
                     try:
                         messaging.send(message)
-                        # Repeated alerts ozhivaakkan task notified = True aakkunnu
                         db.collection("tasks").document(doc.id).update({"notified": True})
                         print(f"🔥 [SUCCESS] Notification sent for: {task_title}")
                     except Exception as e:
@@ -76,8 +83,25 @@ def check_and_send_due_notifications():
     except Exception as e:
         print(f"❌ Error querying Firestore: {e}")
 
+# Render Web Service port bind cheyyaan ulla tiny dummy server
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Madiyan Cron Worker is Active and Running 24/7!")
+
+def start_health_server():
+    port = int(os.environ.get("PORT", 8080))
+    server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
+    print(f"🌐 Health server running on port {port}")
+    server.serve_forever()
+
 if __name__ == "__main__":
-    print("🚀 Madiyan Background Cron Worker is RUNNING...")
+    print("🚀 Madiyan Background Cron Worker is STARTING...")
+    
+    # Render-nte port issue fix cheyyaan server-ne background thread-il run aakkunnu
+    threading.Thread(target=start_health_server, daemon=True).start()
+
     print("👀 Listening for due tasks every 10 seconds...")
     while True:
         check_and_send_due_notifications()
