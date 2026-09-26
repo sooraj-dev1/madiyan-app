@@ -12,7 +12,7 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-// Manglish Roasts
+// Manglish Roasts Database
 const ROASTS = {
   salim: [
     "Eda dooshya... Task time kazhinju! Ini entha justification?",
@@ -94,7 +94,7 @@ loginForm.addEventListener("submit", async (e) => {
   }
 });
 
-// 2. SIGNUP HANDLER (With Name + Confirm Password)
+// 2. SIGNUP HANDLER (Saves Username into Profile & Firestore)
 signupForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   clearMessages();
@@ -111,9 +111,7 @@ signupForm.addEventListener("submit", async (e) => {
 
   try {
     const cred = await auth.createUserWithEmailAndPassword(email, password);
-    // Set user profile display name
     await cred.user.updateProfile({ displayName: name });
-    // Also save in Firestore users collection
     await db.collection("users").doc(cred.user.uid).set({
       name: name,
       email: email,
@@ -128,14 +126,14 @@ signupForm.addEventListener("submit", async (e) => {
 forgotPasswordLink.addEventListener("click", async () => {
   const email = document.getElementById("login-email").value.trim();
   if (!email) {
-    alert("Please enter your email in the box first to send reset link!");
+    alert("Please enter your email address first!");
     document.getElementById("login-email").focus();
     return;
   }
 
   try {
     await auth.sendPasswordResetEmail(email);
-    authSuccess.innerText = `Password reset link sent to ${email}. Check inbox!`;
+    authSuccess.innerText = `Reset link sent to ${email}. Check inbox!`;
   } catch (err) {
     authError.innerText = err.message;
   }
@@ -155,7 +153,7 @@ googleBtn.addEventListener("click", async () => {
 // LOGOUT
 logoutBtn.addEventListener("click", () => auth.signOut());
 
-// ================= AUTH OBSERVER (UPDATED FOR USERNAME) =================
+// ================= AUTH OBSERVER (USERNAME & ICON) =================
 auth.onAuthStateChanged(async (user) => {
   if (user) {
     currentUser = user;
@@ -164,7 +162,7 @@ auth.onAuthStateChanged(async (user) => {
 
     let finalName = user.displayName;
 
-    // 1. Oruvela displayName illenkil (Email Signup case), Firestore-il ninnu fetch cheyyunnu:
+    // Check firestore if displayName is missing
     if (!finalName) {
       try {
         const userDoc = await db.collection("users").doc(user.uid).get();
@@ -176,19 +174,14 @@ auth.onAuthStateChanged(async (user) => {
       }
     }
 
-    // 2. Ennittum name kittiyillenkil email-inte first part username aakkunnu
     if (!finalName) {
       finalName = user.email.split("@")[0];
     }
 
-    // UI-il Name-um Icon-um set cheyyunnu
     userNameTag.innerText = finalName;
     userEmailTag.innerText = user.email;
-    
-    // Icon-il Avatar Letter (First Character uppercase):
     userAvatar.innerText = finalName.charAt(0).toUpperCase();
 
-    // Init Notifications & Load Tasks
     setupNotifications();
     loadTasks();
   } else {
@@ -197,46 +190,72 @@ auth.onAuthStateChanged(async (user) => {
     authContainer.classList.remove("hidden");
   }
 });
-// ================= NOTIFICATION ENGINE =================
+
+// ================= NOTIFICATION ENGINE (DESKTOP & MOBILE) =================
 async function setupNotifications() {
   if ('serviceWorker' in navigator) {
     try {
-      serviceWorkerRegistration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+      serviceWorkerRegistration = await navigator.serviceWorker.register('./firebase-messaging-sw.js', { scope: './' });;
       console.log("Service Worker Active:", serviceWorkerRegistration);
     } catch (e) {
       console.warn("SW Registration:", e);
     }
   }
-
   checkNotificationPermission();
 }
 
 function checkNotificationPermission() {
-  if (!("Notification" in window)) return;
+  if (!("Notification" in window)) {
+    notifPermBanner.classList.add("hidden");
+    return;
+  }
 
   if (Notification.permission === "granted") {
     notifPermBanner.classList.add("hidden");
-  } else if (Notification.permission === "denied" || Notification.permission === "default") {
+  } else {
     notifPermBanner.classList.remove("hidden");
   }
 }
 
-grantPermBtn.addEventListener("click", async () => {
-  const perm = await Notification.requestPermission();
-  if (perm === "granted") {
-    notifPermBanner.classList.add("hidden");
-    triggerPopNotification("Notifications Enabled! 🎉", "Ini samayam thettiyaal roast pop-up aayi varum!");
+// Mobile Compatible Permission Trigger
+async function requestNotificationAccess() {
+  if (!("Notification" in window)) {
+    alert("This browser does not support web notifications.");
+    return;
   }
-});
 
-// Test Pop Button
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission === "granted") {
+      notifPermBanner.classList.add("hidden");
+      triggerPopNotification("Notifications Active! 🎉", "Task samayam thettiyaal roast pop varum!");
+    } else if (permission === "denied") {
+      alert("Notifications blocked! Please enable notifications in your browser/site settings.");
+    }
+  } catch (error) {
+    // Legacy callback fallback
+    Notification.requestPermission((res) => {
+      if (res === "granted") {
+        notifPermBanner.classList.add("hidden");
+        triggerPopNotification("Notifications Active! 🎉", "Task samayam thettiyaal roast pop varum!");
+      }
+    });
+  }
+}
+
+// Bind both click and touchend for mobile devices
+if (grantPermBtn) {
+  grantPermBtn.addEventListener("click", requestNotificationAccess);
+  grantPermBtn.addEventListener("touchend", (e) => {
+    e.preventDefault();
+    requestNotificationAccess();
+  });
+}
+
+// Test Notification Button
 testNotifBtn.addEventListener("click", async () => {
   if (Notification.permission !== "granted") {
-    const perm = await Notification.requestPermission();
-    if (perm !== "granted") {
-      alert("Please allow notification permission in your browser!");
-      return;
-    }
+    await requestNotificationAccess();
   }
   triggerPopNotification("Testing Madiyan Pop! ⏰", "Aliyaaa... Notification super aayi work aavunund!");
 });
@@ -245,7 +264,6 @@ testNotifBtn.addEventListener("click", async () => {
 function triggerPopNotification(title, body, taskId = null) {
   playBeep();
 
-  // If Service Worker available, show native notification with buttons
   if (serviceWorkerRegistration && serviceWorkerRegistration.showNotification) {
     serviceWorkerRegistration.showNotification(title, {
       body: body,
@@ -265,7 +283,7 @@ function triggerPopNotification(title, body, taskId = null) {
   }
 }
 
-// Sound synthesized
+// Web Audio synthesizer for alert tone
 function playBeep() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -314,7 +332,7 @@ function loadTasks() {
       taskList.innerHTML = "";
 
       if (snapshot.empty) {
-        taskList.innerHTML = `<p style="color:#71717a; font-size:13px;">Oru pending task-um illa. Uluppulla aal!</p>`;
+        taskList.innerHTML = `<p style="color:#71717a; font-size:13px; text-align:center; padding: 20px 0;">Oru pending task-um illa. Uluppulla aal!</p>`;
         return;
       }
 
@@ -339,7 +357,7 @@ function loadTasks() {
     });
 }
 
-// Background Task Checker (Runs every 10 seconds)
+// Scheduler loop (Checks every 10s)
 setInterval(async () => {
   if (!activeTasks.length) return;
 
@@ -348,9 +366,7 @@ setInterval(async () => {
   for (const task of activeTasks) {
     const taskTime = new Date(task.time).getTime();
 
-    // If scheduled time has passed and not notified yet
     if (taskTime <= now && !task.notified) {
-      // Mark as notified in DB so it doesn't loop
       await db.collection("tasks").doc(task.id).update({ notified: true });
 
       const personaRoasts = ROASTS[task.persona] || ROASTS.salim;
@@ -364,7 +380,6 @@ setInterval(async () => {
 // Finish Task
 window.finishTask = async (id) => {
   await db.collection("tasks").doc(id).update({ completed: true });
-  alert("Happa! Oru task theerthu. Samadhaanam aayi!");
 };
 
 // Snooze Task (+5 min)
@@ -377,7 +392,7 @@ window.snoozeTask = async (id, oldTime, persona) => {
   triggerPopNotification("⚠️ Snoozed +5 Mins!", roast);
 };
 
-// Listen to actions from Service Worker clicks (Theerthu / Snooze)
+// Handle Service Worker Tray Actions
 if (navigator.serviceWorker) {
   navigator.serviceWorker.addEventListener('message', (event) => {
     if (event.data?.action === 'done' && event.data?.taskId) {

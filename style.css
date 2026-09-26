@@ -3,6 +3,7 @@
   padding: 0;
   box-sizing: border-box;
   font-family: 'Plus Jakarta Sans', sans-serif;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
@@ -39,6 +40,7 @@ body {
   background: rgba(249, 115, 22, 0.1);
   padding: 4px 10px;
   border-radius: 20px;
+  display: inline-block;
 }
 
 .brand-header h1 {
@@ -68,7 +70,7 @@ body {
   background: transparent;
   border: none;
   color: #71717a;
-  padding: 8px;
+  padding: 10px;
   font-size: 13px;
   font-weight: 600;
   border-radius: 7px;
@@ -108,16 +110,18 @@ body {
   font-size: 12px;
   cursor: pointer;
   text-decoration: underline;
+  padding: 4px;
 }
 
 input, select {
   background: #090a0f;
   border: 1px solid #27272a;
-  padding: 11px 14px;
+  padding: 12px 14px;
   border-radius: 10px;
   color: #ffffff;
   font-size: 14px;
   outline: none;
+  width: 100%;
 }
 
 input:focus, select:focus {
@@ -202,6 +206,7 @@ input:focus, select:focus {
 .avatar-circle {
   width: 42px;
   height: 42px;
+  min-width: 42px;
   border-radius: 50%;
   background: linear-gradient(135deg, #f97316, #ea580c);
   color: #ffffff;
@@ -217,10 +222,13 @@ input:focus, select:focus {
 .user-badge h3 {
   font-size: 15px;
   font-weight: 600;
+  color: #f4f4f5;
+  margin: 0;
+  line-height: 1.2;
 }
 
 .user-email-sub {
-  font-size: 11px;
+  font-size: 12px;
   color: #71717a;
 }
 
@@ -231,7 +239,7 @@ input:focus, select:focus {
 
 .btn-test {
   width: auto;
-  padding: 6px 10px;
+  padding: 8px 12px;
   font-size: 12px;
   background: #232530;
   color: #e4e4e7;
@@ -240,26 +248,27 @@ input:focus, select:focus {
 
 .btn-logout {
   width: auto;
-  padding: 6px 12px;
+  padding: 8px 12px;
   font-size: 12px;
   background: transparent;
   color: #a1a1aa;
   border: 1px solid #27272a;
 }
 
-/* Banner */
+/* Notification Permission Banner */
 .banner {
-  padding: 10px 14px;
+  padding: 12px 14px;
   border-radius: 10px;
-  font-size: 12px;
+  font-size: 13px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
+  gap: 10px;
 }
 
 .banner.warning {
-  background: rgba(245, 158, 11, 0.1);
+  background: rgba(245, 158, 11, 0.12);
   border: 1px solid #f59e0b;
   color: #fbbf24;
 }
@@ -267,11 +276,13 @@ input:focus, select:focus {
 .banner-btn {
   background: #f59e0b;
   border: none;
-  color: #000;
-  padding: 4px 8px;
-  border-radius: 5px;
+  color: #000000;
+  padding: 6px 12px;
+  border-radius: 6px;
   font-weight: 700;
+  font-size: 12px;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .task-box {
@@ -327,7 +338,7 @@ input:focus, select:focus {
 }
 
 .btn-card {
-  padding: 6px 10px;
+  padding: 7px 12px;
   border-radius: 6px;
   font-size: 12px;
   font-weight: 600;
@@ -347,4 +358,68 @@ input:focus, select:focus {
 
 .hidden {
   display: none !important;
+}
+
+/* ================= MOBILE RESPONSIVE TWEAKS ================= */
+@media (max-width: 600px) {
+  body {
+    padding: 16px 12px;
+  }
+
+  .wrapper {
+    max-width: 100%;
+  }
+
+  .card {
+    padding: 20px 16px;
+    border-radius: 14px;
+  }
+
+  .brand-header h1 {
+    font-size: 22px;
+  }
+
+  .navbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .nav-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .btn-test, .btn-logout {
+    flex: 1;
+    text-align: center;
+  }
+
+  .row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .task-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .action-buttons {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .btn-card {
+    flex: 1;
+    padding: 10px;
+    font-size: 13px;
+    text-align: center;
+  }
+
+  .btn {
+    padding: 14px;
+    font-size: 14px;
+  }
 }
