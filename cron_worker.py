@@ -1,14 +1,14 @@
 import firebase_admin
 from firebase_admin import credentials, firestore, messaging
-from datetime import datetime
+from datetime import datetime, timezone
 import time
 
-# 1. Step 1-il download cheytha key load cheyyunnu
+# 1. Firebase Admin SDK initialize cheyyunnu
 cred = credentials.Certificate("serviceAccountKey.json")
 firebase_admin.initialize_app(cred)
 db = firestore.client()
 
-# Sarcastic Manglish Roasts
+# Sarcastic Manglish Roasts Database
 ROASTS = {
     "salim": [
         "Eda dooshya... Task time kazhinju! Ini entha justification?",
@@ -28,50 +28,50 @@ ROASTS = {
 }
 
 def check_and_send_due_notifications():
-    # Current UTC time string format-il
-    now_iso = datetime.utcnow().isoformat()
+    # Timezone-aware UTC timestamp (Python 3.14 warning fix)
+    now_iso = datetime.now(timezone.utc).isoformat()
 
     try:
         tasks_ref = db.collection("tasks")
-        # Due aaya pending tasks thappunnu
-        due_tasks = tasks_ref.where("completed", "==", False) \
-                             .where("notified", "==", False) \
-                             .where("time", "<=", now_iso) \
-                             .stream()
+        # Single-field filter query (Composite index nirdharanam cheyyendathilla!)
+        due_tasks = tasks_ref.where(filter=firestore.FieldFilter("completed", "==", False)).stream()
 
         for doc in due_tasks:
             task = doc.to_dict()
-            token = task.get("deviceToken")
 
-            if token:
-                persona = task.get("persona", "chank")
-                roast_list = ROASTS.get(persona, ROASTS["chank"])
-                roast_msg = roast_list[0]
-                task_title = task.get("title", "Task")
+            # Python side checking: Notified aayittillathathum time kazhinjathum aaya tasks
+            if not task.get("notified", False) and task.get("time", "") <= now_iso:
+                token = task.get("deviceToken")
 
-                # Google FCM message structure
-                message = messaging.Message(
-                    notification=messaging.Notification(
-                        title=f"⏰ {task_title}",
-                        body=roast_msg
-                    ),
-                    data={
-                        "taskId": doc.id,
-                        "title": f"⏰ {task_title}",
-                        "body": roast_msg
-                    },
-                    token=token
-                )
+                if token:
+                    persona = task.get("persona", "chank")
+                    roast_list = ROASTS.get(persona, ROASTS["chank"])
+                    roast_msg = roast_list[0]
+                    task_title = task.get("title", "Task")
 
-                try:
-                    messaging.send(message)
-                    # Task notified aayi mark cheyyunnu so repeat aavilla
-                    db.collection("tasks").document(doc.id).update({"notified": True})
-                    print(f"🔥 [SUCCESS] Notification sent for: {task_title}")
-                except Exception as e:
-                    print(f"⚠️ [FCM Send Error]: {e}")
-            else:
-                print(f"ℹ️ Task '{task.get('title')}' has no deviceToken saved yet.")
+                    # FCM Web Push Payload
+                    message = messaging.Message(
+                        notification=messaging.Notification(
+                            title=f"⏰ {task_title}",
+                            body=roast_msg
+                        ),
+                        data={
+                            "taskId": doc.id,
+                            "title": f"⏰ {task_title}",
+                            "body": roast_msg
+                        },
+                        token=token
+                    )
+
+                    try:
+                        messaging.send(message)
+                        # Repeated alerts ozhivaakkan task notified = True aakkunnu
+                        db.collection("tasks").document(doc.id).update({"notified": True})
+                        print(f"🔥 [SUCCESS] Notification sent for: {task_title}")
+                    except Exception as e:
+                        print(f"⚠️ [FCM Send Error]: {e}")
+                else:
+                    print(f"ℹ️ Task '{task.get('title')}' has no deviceToken saved yet.")
 
     except Exception as e:
         print(f"❌ Error querying Firestore: {e}")
