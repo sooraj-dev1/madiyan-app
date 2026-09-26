@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Madiyan Reminders</title>
+  <link rel="stylesheet" href="style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+  <div class="wrapper">
+    <!-- ================= 1. AUTH SCREEN ================= -->
+    <div id="auth-container" class="card">
+      <div class="brand-header">
+        <span class="pill-badge">MALAYALAM ROAST ENGINE</span>
+        <h1>Madiyan Reminders</h1>
+        <p id="auth-subtitle">Login cheythu task vekkoo, samayam thettiyaal katta roast!</p>
+      </div>
+
+      <!-- Tab Switcher -->
+      <div class="tab-switch">
+        <button id="tab-login" class="tab-btn active" type="button">Log In</button>
+        <button id="tab-signup" class="tab-btn" type="button">Sign Up</button>
+      </div>
+
+      <!-- LOGIN FORM -->
+      <form id="login-form">
+        <div class="input-group">
+          <label>Email Address</label>
+          <input type="email" id="login-email" placeholder="name@example.com" required />
+        </div>
+
+        <div class="input-group">
+          <div class="label-row">
+            <label>Password</label>
+            <button type="button" id="forgot-password-link" class="text-link">Forgot password?</button>
+          </div>
+          <input type="password" id="login-password" placeholder="Enter password" required />
+        </div>
+
+        <button type="submit" class="btn btn-primary">Log In</button>
+      </form>
+
+      <!-- SIGNUP FORM (Initially Hidden) -->
+      <form id="signup-form" class="hidden">
+        <div class="input-group">
+          <label>Your Name / Nickname</label>
+          <input type="text" id="signup-name" placeholder="e.g. Rahul / Kichu" required />
+        </div>
+
+        <div class="input-group">
+          <label>Email Address</label>
+          <input type="email" id="signup-email" placeholder="name@example.com" required />
+        </div>
+
+        <div class="input-group">
+          <label>Create Password</label>
+          <input type="password" id="signup-password" placeholder="At least 6 characters" required />
+        </div>
+
+        <div class="input-group">
+          <label>Confirm Password</label>
+          <input type="password" id="signup-confirm-password" placeholder="Re-enter password" required />
+        </div>
+
+        <button type="submit" class="btn btn-primary">Create Account</button>
+      </form>
+
+      <div class="divider"><span>OR</span></div>
+
+      <button id="google-btn" class="btn btn-google" type="button">
+        <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.68v3h3.86c2.26-2.09 3.68-5.17 3.68-9.12z"/><path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09C3.29 21.36 7.35 24 12 24z"/><path fill="#FBBC05" d="M5.27 14.29c-.25-.72-.38-1.49-.38-2.29s.13-1.57.38-2.29V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.98-3.09z"/><path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.35 0 3.29 2.64 1.29 6.62l3.98 3.09c.95-2.85 3.6-4.96 6.73-4.96z"/></svg>
+        Continue with Google
+      </button>
+
+      <p id="auth-error" class="error-text"></p>
+      <p id="auth-success" class="success-text"></p>
+    </div>
+
+    <!-- ================= 2. DASHBOARD SCREEN ================= -->
+    <div id="dashboard-container" class="hidden">
+      <!-- Navbar with Avatar Profile -->
+      <header class="navbar">
+        <div class="user-badge">
+          <div id="user-avatar" class="avatar-circle">M</div>
+          <div>
+            <h3 id="user-name-tag">Madiyan</h3>
+            <span id="user-email-tag" class="user-email-sub">user@email.com</span>
+          </div>
+        </div>
+        <div class="nav-actions">
+          <button id="test-notif-btn" class="btn btn-test" title="Test if Notification Pop works">🔔 Test Pop</button>
+          <button id="logout-btn" class="btn btn-logout">Log Out</button>
+        </div>
+      </header>
+
+      <!-- Notification Warning Banner (If blocked/not allowed) -->
+      <div id="notif-perm-banner" class="banner warning hidden">
+        <span>⚠️ Notifications blocked! Click to enable system popups:</span>
+        <button id="grant-perm-btn" class="banner-btn">Enable</button>
+      </div>
+
+      <!-- Add Task Form -->
+      <form id="task-form" class="card task-box">
+        <input type="text" id="task-title" placeholder="What task do you have to do? (e.g. Study Math)" required />
+        <div class="row">
+          <input type="datetime-local" id="task-time" required />
+          <select id="roast-persona">
+            <option value="salim">🎭 Salim Kumar</option>
+            <option value="amma">👩 Amma Guilt</option>
+            <option value="chank">🔥 Chank Bro</option>
+          </select>
+          <button type="submit" class="btn btn-accent">+ Set Task</button>
+        </div>
+      </form>
+
+      <!-- Tasks List -->
+      <div class="task-head">
+        <h3>Pending Tasks</h3>
+      </div>
+      <div id="task-list" class="task-list">
+        <!-- Rendered with JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-messaging-compat.js"></script>
+
+  <script src="app.js"></script>
+</body>
+</html>
