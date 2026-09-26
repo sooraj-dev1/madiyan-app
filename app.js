@@ -1,4 +1,4 @@
-// 1. Firebase Config
+// ================= 1. FIREBASE CONFIG =================
 const firebaseConfig = {
   apiKey: "AIzaSyAcQx1ZzgBI2GS8wih6Bdb5fgczBGdaxWg",
   authDomain: "madiyan-reminders.firebaseapp.com",
@@ -11,8 +11,12 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
+const messaging = firebase.messaging();
 
-// Manglish Roasts Database
+// Step 2-il kittiya VAPID Public Key:
+const VAPID_KEY = "BKHD-zngiP7nAVFLLLsQkakDwTM0tBvyZrmwwd82A-bcTKXkOcQDMBDpxIzEYRYhIVJow_qnE5DKCNHT--g20WA";
+
+// Sarcastic Manglish Roasts Database
 const ROASTS = {
   salim: [
     "Eda dooshya... Task time kazhinju! Ini entha justification?",
@@ -31,7 +35,7 @@ const ROASTS = {
   ]
 };
 
-// UI Selectors
+// ================= UI SELECTORS =================
 const authContainer = document.getElementById("auth-container");
 const dashboardContainer = document.getElementById("dashboard-container");
 const tabLogin = document.getElementById("tab-login");
@@ -55,6 +59,7 @@ const taskForm = document.getElementById("task-form");
 const taskList = document.getElementById("task-list");
 
 let currentUser = null;
+let currentDeviceToken = null;
 let activeTasks = [];
 let serviceWorkerRegistration = null;
 
@@ -153,7 +158,7 @@ googleBtn.addEventListener("click", async () => {
 // LOGOUT
 logoutBtn.addEventListener("click", () => auth.signOut());
 
-// ================= AUTH OBSERVER (USERNAME & ICON) =================
+// ================= AUTH OBSERVER =================
 auth.onAuthStateChanged(async (user) => {
   if (user) {
     currentUser = user;
@@ -185,35 +190,54 @@ auth.onAuthStateChanged(async (user) => {
     loadTasks();
   } else {
     currentUser = null;
+    currentDeviceToken = null;
     dashboardContainer.classList.add("hidden");
     authContainer.classList.remove("hidden");
   }
 });
 
-// ================= NOTIFICATION & SERVICE WORKER ENGINE =================
+// ================= NOTIFICATION & FCM DEVICE TOKEN ENGINE =================
 async function setupNotifications() {
-  if ('serviceWorker' in navigator) {
-    try {
-      // Relative path for GitHub Pages compatibility
-      serviceWorkerRegistration = await navigator.serviceWorker.register('./firebase-messaging-sw.js', { scope: './' });
-      console.log("Service Worker Active:", serviceWorkerRegistration);
-    } catch (e) {
-      console.warn("SW Registration:", e);
+  if (!('serviceWorker' in navigator)) return;
+
+  try {
+    // Relative path for GitHub Pages compatibility
+    serviceWorkerRegistration = await navigator.serviceWorker.register('./firebase-messaging-sw.js', { scope: './' });
+    console.log("Service Worker Active:", serviceWorkerRegistration);
+
+    if (Notification.permission === "granted") {
+      notifPermBanner.classList.add("hidden");
+      await fetchAndSaveDeviceToken();
+    } else {
+      notifPermBanner.classList.remove("hidden");
     }
+  } catch (e) {
+    console.warn("SW Registration Error:", e);
   }
-  checkNotificationPermission();
 }
 
-function checkNotificationPermission() {
-  if (!("Notification" in window)) {
-    notifPermBanner.classList.add("hidden");
-    return;
-  }
+// Fetch unique push token and save to Firestore
+async function fetchAndSaveDeviceToken() {
+  try {
+    const swReg = await navigator.serviceWorker.ready;
+    const token = await messaging.getToken({
+      serviceWorkerRegistration: swReg,
+      vapidKey: VAPID_KEY
+    });
 
-  if (Notification.permission === "granted") {
-    notifPermBanner.classList.add("hidden");
-  } else {
-    notifPermBanner.classList.remove("hidden");
+    if (token) {
+      currentDeviceToken = token;
+      console.log("FCM Device Push Token:", token);
+
+      if (currentUser) {
+        await db.collection("users").doc(currentUser.uid).set({
+          fcmToken: token,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+      }
+    }
+  } catch (err) {
+    console.warn("FCM Token fetch failed:", err);
   }
 }
 
@@ -228,14 +252,16 @@ async function requestNotificationAccess() {
     const permission = await Notification.requestPermission();
     if (permission === "granted") {
       notifPermBanner.classList.add("hidden");
+      await fetchAndSaveDeviceToken();
       triggerPopNotification("Notifications Active! 🎉", "Task samayam thettiyaal roast pop varum!");
     } else if (permission === "denied") {
       alert("Notifications blocked! Please enable notifications in your browser settings.");
     }
   } catch (error) {
-    Notification.requestPermission((res) => {
+    Notification.requestPermission(async (res) => {
       if (res === "granted") {
         notifPermBanner.classList.add("hidden");
+        await fetchAndSaveDeviceToken();
         triggerPopNotification("Notifications Active! 🎉", "Task samayam thettiyaal roast pop varum!");
       }
     });
@@ -283,7 +309,6 @@ function speakRoast(taskTitle, roastMsg) {
 // Trigger Native System Pop + Speech Out Loud
 function triggerPopNotification(title, body, taskId = null) {
   playBeep();
-
   speakRoast(title, body);
 
   if (serviceWorkerRegistration && serviceWorkerRegistration.showNotification) {
@@ -331,8 +356,14 @@ taskForm.addEventListener("submit", async (e) => {
 
   if (!currentUser) return;
 
+  // Device Token assure cheyyunnu
+  if (!currentDeviceToken) {
+    await fetchAndSaveDeviceToken();
+  }
+
   await db.collection("tasks").add({
     userId: currentUser.uid,
+    deviceToken: currentDeviceToken || null, // Background worker ithilekkaanu notification push cheyyuka
     title,
     time: new Date(time).toISOString(),
     persona,
@@ -378,7 +409,7 @@ function loadTasks() {
     });
 }
 
-// Background Task Checker Loop (Every 10 seconds)
+// Foreground local fallback checker (Tab open aayirikkumbo instant alert varan)
 setInterval(async () => {
   if (!activeTasks.length) return;
 
