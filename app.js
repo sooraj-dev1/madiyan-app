@@ -94,7 +94,7 @@ loginForm.addEventListener("submit", async (e) => {
   }
 });
 
-// 2. SIGNUP HANDLER (Saves Username into Profile & Firestore)
+// 2. SIGNUP HANDLER (Name Profile Save)
 signupForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   clearMessages();
@@ -126,7 +126,7 @@ signupForm.addEventListener("submit", async (e) => {
 forgotPasswordLink.addEventListener("click", async () => {
   const email = document.getElementById("login-email").value.trim();
   if (!email) {
-    alert("Please enter your email address first!");
+    alert("Please enter your email address in the login box first!");
     document.getElementById("login-email").focus();
     return;
   }
@@ -162,7 +162,6 @@ auth.onAuthStateChanged(async (user) => {
 
     let finalName = user.displayName;
 
-    // Check firestore if displayName is missing
     if (!finalName) {
       try {
         const userDoc = await db.collection("users").doc(user.uid).get();
@@ -191,11 +190,12 @@ auth.onAuthStateChanged(async (user) => {
   }
 });
 
-// ================= NOTIFICATION ENGINE (DESKTOP & MOBILE) =================
+// ================= NOTIFICATION & SERVICE WORKER ENGINE =================
 async function setupNotifications() {
   if ('serviceWorker' in navigator) {
     try {
-      serviceWorkerRegistration = await navigator.serviceWorker.register('./firebase-messaging-sw.js', { scope: './' });;
+      // Relative path for GitHub Pages compatibility
+      serviceWorkerRegistration = await navigator.serviceWorker.register('./firebase-messaging-sw.js', { scope: './' });
       console.log("Service Worker Active:", serviceWorkerRegistration);
     } catch (e) {
       console.warn("SW Registration:", e);
@@ -230,10 +230,9 @@ async function requestNotificationAccess() {
       notifPermBanner.classList.add("hidden");
       triggerPopNotification("Notifications Active! 🎉", "Task samayam thettiyaal roast pop varum!");
     } else if (permission === "denied") {
-      alert("Notifications blocked! Please enable notifications in your browser/site settings.");
+      alert("Notifications blocked! Please enable notifications in your browser settings.");
     }
   } catch (error) {
-    // Legacy callback fallback
     Notification.requestPermission((res) => {
       if (res === "granted") {
         notifPermBanner.classList.add("hidden");
@@ -243,7 +242,6 @@ async function requestNotificationAccess() {
   }
 }
 
-// Bind both click and touchend for mobile devices
 if (grantPermBtn) {
   grantPermBtn.addEventListener("click", requestNotificationAccess);
   grantPermBtn.addEventListener("touchend", (e) => {
@@ -260,9 +258,33 @@ testNotifBtn.addEventListener("click", async () => {
   triggerPopNotification("Testing Madiyan Pop! ⏰", "Aliyaaa... Notification super aayi work aavunund!");
 });
 
-// Trigger Native System Pop
+// ================= TEXT-TO-SPEECH (TTS) ENGINE =================
+function speakRoast(taskTitle, roastMsg) {
+  if (!('speechSynthesis' in window)) return;
+
+  window.speechSynthesis.cancel();
+
+  const voicePrompt = `Attention! Time out for ${taskTitle}. ${roastMsg}`;
+  const utterance = new SpeechSynthesisUtterance(voicePrompt);
+
+  utterance.lang = 'en-IN';
+  utterance.rate = 0.95;
+  utterance.pitch = 1.0;
+
+  const voices = window.speechSynthesis.getVoices();
+  const indianVoice = voices.find(v => v.lang === 'en-IN' || v.name.includes('India'));
+  if (indianVoice) {
+    utterance.voice = indianVoice;
+  }
+
+  window.speechSynthesis.speak(utterance);
+}
+
+// Trigger Native System Pop + Speech Out Loud
 function triggerPopNotification(title, body, taskId = null) {
   playBeep();
+
+  speakRoast(title, body);
 
   if (serviceWorkerRegistration && serviceWorkerRegistration.showNotification) {
     serviceWorkerRegistration.showNotification(title, {
@@ -283,7 +305,7 @@ function triggerPopNotification(title, body, taskId = null) {
   }
 }
 
-// Web Audio synthesizer for alert tone
+// Tone Beep
 function playBeep() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -322,7 +344,6 @@ taskForm.addEventListener("submit", async (e) => {
   taskForm.reset();
 });
 
-// Realtime Tasks Listener
 function loadTasks() {
   db.collection("tasks")
     .where("userId", "==", currentUser.uid)
@@ -357,7 +378,7 @@ function loadTasks() {
     });
 }
 
-// Scheduler loop (Checks every 10s)
+// Background Task Checker Loop (Every 10 seconds)
 setInterval(async () => {
   if (!activeTasks.length) return;
 
@@ -377,12 +398,12 @@ setInterval(async () => {
   }
 }, 10000);
 
-// Finish Task
+// Finish Task Action
 window.finishTask = async (id) => {
   await db.collection("tasks").doc(id).update({ completed: true });
 };
 
-// Snooze Task (+5 min)
+// Snooze Action (+5m)
 window.snoozeTask = async (id, oldTime, persona) => {
   const newTime = new Date(new Date(oldTime).getTime() + 5 * 60000).toISOString();
   await db.collection("tasks").doc(id).update({ time: newTime, notified: false });
@@ -392,7 +413,7 @@ window.snoozeTask = async (id, oldTime, persona) => {
   triggerPopNotification("⚠️ Snoozed +5 Mins!", roast);
 };
 
-// Handle Service Worker Tray Actions
+// Service Worker Tray Message Handlers
 if (navigator.serviceWorker) {
   navigator.serviceWorker.addEventListener('message', (event) => {
     if (event.data?.action === 'done' && event.data?.taskId) {
