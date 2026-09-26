@@ -48,3 +48,26 @@ self.addEventListener('notificationclick', (event) => {
     self.clients.openWindow('./');
   }
 });
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  const title = event.notification.title || "Task Alert";
+  const roast = event.notification.body || "Task time kazhinju!";
+
+  // Voice play cheyyan parameter encode cheythu pass cheyyunnu
+  const targetUrl = `./?speak=true&title=${encodeURIComponent(title)}&roast=${encodeURIComponent(roast)}`;
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      for (let client of windowClients) {
+        if ('focus' in client) {
+          client.navigate(targetUrl);
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl);
+      }
+    })
+  );
+});
