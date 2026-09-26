@@ -13,7 +13,7 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 const messaging = firebase.messaging();
 
-// Step 2-il kittiya VAPID Public Key:
+// VAPID Public Key:
 const VAPID_KEY = "BKHD-zngiP7nAVFLLLsQkakDwTM0tBvyZrmwwd82A-bcTKXkOcQDMBDpxIzEYRYhIVJow_qnE5DKCNHT--g20WA";
 
 // Sarcastic Manglish Roasts Database
@@ -63,6 +63,105 @@ let currentDeviceToken = null;
 let activeTasks = [];
 let serviceWorkerRegistration = null;
 
+// ================= ROBUST TTS AUDIO ENGINE =================
+let cachedVoices = [];
+
+function initVoices() {
+  if (!('speechSynthesis' in window)) return;
+  cachedVoices = window.speechSynthesis.getVoices();
+  if (window.speechSynthesis.onvoiceschanged !== undefined) {
+    window.speechSynthesis.onvoiceschanged = () => {
+      cachedVoices = window.speechSynthesis.getVoices();
+    };
+  }
+}
+initVoices();
+
+function speakRoast(taskTitle, roastMsg) {
+  if (!('speechSynthesis' in window)) {
+    console.warn("Speech Synthesis not supported in this browser.");
+    return;
+  }
+
+  // Chrome speech queue freeze fix
+  window.speechSynthesis.resume();
+  window.speechSynthesis.cancel();
+
+  // Emojis and special characters strip cheyyunnu so voice hangs aavilla
+  const cleanTitle = (taskTitle || "Task").replace(/[^\w\s]/gi, '');
+  const cleanMsg = (roastMsg || "").replace(/[^\w\s!?.,]/gi, '');
+  const fullText = `Attention! Time out for ${cleanTitle}. ${cleanMsg}`;
+
+  const utterance = new SpeechSynthesisUtterance(fullText);
+
+  if (!cachedVoices.length) {
+    cachedVoices = window.speechSynthesis.getVoices();
+  }
+
+  // Best Indian or English voice pick cheyyunnu
+  const selectedVoice = cachedVoices.find(v => 
+    v.lang === 'en-IN' || 
+    v.name.toLowerCase().includes('india') || 
+    v.lang.startsWith('en')
+  );
+
+  if (selectedVoice) {
+    utterance.voice = selectedVoice;
+  }
+
+  utterance.lang = 'en-IN';
+  utterance.volume = 1.0;
+  utterance.rate = 0.95;
+  utterance.pitch = 1.0;
+
+  utterance.onstart = () => console.log("🔊 TTS playback started...");
+  utterance.onerror = (e) => console.error("❌ TTS playback error:", e);
+  utterance.onend = () => console.log("✅ TTS playback finished.");
+
+  window.speechSynthesis.speak(utterance);
+}
+
+// Tone Beep
+function playBeep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+    osc.frequency.setValueAtTime(880, ctx.currentTime + 0.15);
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.4);
+  } catch (e) {}
+}
+
+// ================= NOTIFICATION DISPATCHER =================
+function triggerPopNotification(title, body, taskId = null) {
+  playBeep();
+  speakRoast(title, body);
+
+  if (serviceWorkerRegistration && serviceWorkerRegistration.showNotification) {
+    serviceWorkerRegistration.showNotification(title, {
+      body: body,
+      icon: "https://cdn-icons-png.flaticon.com/512/3239/3239958.png",
+      badge: "https://cdn-icons-png.flaticon.com/512/3239/3239958.png",
+      requireInteraction: true,
+      tag: taskId || 'reminder',
+      actions: [
+        { action: 'done', title: '✓ Theerthu' },
+        { action: 'snooze', title: '⏱ Snooze (+5m)' }
+      ]
+    });
+  } else if ("Notification" in window && Notification.permission === "granted") {
+    new Notification(title, { body: body });
+  } else {
+    alert(`⏰ ${title}\n\n${body}`);
+  }
+}
+
 // ================= AUTH SWITCHER =================
 tabLogin.addEventListener("click", () => {
   tabLogin.classList.add("active");
@@ -99,7 +198,7 @@ loginForm.addEventListener("submit", async (e) => {
   }
 });
 
-// 2. SIGNUP HANDLER (Name Profile Save)
+// 2. SIGNUP HANDLER
 signupForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   clearMessages();
@@ -196,12 +295,12 @@ auth.onAuthStateChanged(async (user) => {
   }
 });
 
-// ================= NOTIFICATION & FCM DEVICE TOKEN ENGINE =================
+// ================= DEVICE TOKEN & SERVICE WORKER ENGINE =================
 async function setupNotifications() {
   if (!('serviceWorker' in navigator)) return;
 
   try {
-    // Relative path for GitHub Pages compatibility
+    // Relative path for GitHub Pages
     serviceWorkerRegistration = await navigator.serviceWorker.register('./firebase-messaging-sw.js', { scope: './' });
     console.log("Service Worker Active:", serviceWorkerRegistration);
 
@@ -216,7 +315,6 @@ async function setupNotifications() {
   }
 }
 
-// Fetch unique push token and save to Firestore
 async function fetchAndSaveDeviceToken() {
   try {
     const swReg = await navigator.serviceWorker.ready;
@@ -236,12 +334,13 @@ async function fetchAndSaveDeviceToken() {
         }, { merge: true });
       }
     }
+    return token;
   } catch (err) {
     console.warn("FCM Token fetch failed:", err);
+    return null;
   }
 }
 
-// Mobile Compatible Permission Trigger
 async function requestNotificationAccess() {
   if (!("Notification" in window)) {
     alert("This browser does not support web notifications.");
@@ -284,70 +383,7 @@ testNotifBtn.addEventListener("click", async () => {
   triggerPopNotification("Testing Madiyan Pop! ⏰", "Aliyaaa... Notification super aayi work aavunund!");
 });
 
-// ================= TEXT-TO-SPEECH (TTS) ENGINE =================
-function speakRoast(taskTitle, roastMsg) {
-  if (!('speechSynthesis' in window)) return;
-
-  window.speechSynthesis.cancel();
-
-  const voicePrompt = `Attention! Time out for ${taskTitle}. ${roastMsg}`;
-  const utterance = new SpeechSynthesisUtterance(voicePrompt);
-
-  utterance.lang = 'en-IN';
-  utterance.rate = 0.95;
-  utterance.pitch = 1.0;
-
-  const voices = window.speechSynthesis.getVoices();
-  const indianVoice = voices.find(v => v.lang === 'en-IN' || v.name.includes('India'));
-  if (indianVoice) {
-    utterance.voice = indianVoice;
-  }
-
-  window.speechSynthesis.speak(utterance);
-}
-
-// Trigger Native System Pop + Speech Out Loud
-function triggerPopNotification(title, body, taskId = null) {
-  playBeep();
-  speakRoast(title, body);
-
-  if (serviceWorkerRegistration && serviceWorkerRegistration.showNotification) {
-    serviceWorkerRegistration.showNotification(title, {
-      body: body,
-      icon: "https://cdn-icons-png.flaticon.com/512/3239/3239958.png",
-      badge: "https://cdn-icons-png.flaticon.com/512/3239/3239958.png",
-      requireInteraction: true,
-      tag: taskId || 'reminder',
-      actions: [
-        { action: 'done', title: '✓ Theerthu' },
-        { action: 'snooze', title: '⏱ Snooze (+5m)' }
-      ]
-    });
-  } else if ("Notification" in window && Notification.permission === "granted") {
-    new Notification(title, { body: body });
-  } else {
-    alert(`⏰ ${title}\n\n${body}`);
-  }
-}
-
-// Tone Beep
-function playBeep() {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.frequency.setValueAtTime(587.33, ctx.currentTime);
-    osc.frequency.setValueAtTime(880, ctx.currentTime + 0.15);
-    gain.gain.setValueAtTime(0.3, ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 0.4);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.4);
-  } catch (e) {}
-}
-
-// ================= TASK ENGINE & SCHEDULER =================
+// ================= TASK ENGINE (GUARANTEED TOKEN PERSISTENCE) =================
 taskForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   const title = document.getElementById("task-title").value.trim();
@@ -356,14 +392,15 @@ taskForm.addEventListener("submit", async (e) => {
 
   if (!currentUser) return;
 
-  // Device Token assure cheyyunnu
-  if (!currentDeviceToken) {
-    await fetchAndSaveDeviceToken();
+  // Assure token exists before task write
+  let tokenToSend = currentDeviceToken;
+  if (!tokenToSend) {
+    tokenToSend = await fetchAndSaveDeviceToken();
   }
 
   await db.collection("tasks").add({
     userId: currentUser.uid,
-    deviceToken: currentDeviceToken || null, // Background worker ithilekkaanu notification push cheyyuka
+    deviceToken: tokenToSend || null, // App logout/closed aayalum background script ithilekku push cheyyum
     title,
     time: new Date(time).toISOString(),
     persona,
@@ -409,7 +446,7 @@ function loadTasks() {
     });
 }
 
-// Foreground local fallback checker (Tab open aayirikkumbo instant alert varan)
+// Foreground local fallback checker
 setInterval(async () => {
   if (!activeTasks.length) return;
 
